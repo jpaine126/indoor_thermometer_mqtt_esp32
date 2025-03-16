@@ -10,17 +10,7 @@
 
 #include <Arduino_JSON.h>
 
-/************************* WiFi Access Point *********************************/
-
-#define WLAN_SSID       ""
-#define WLAN_PASS       ""
-
-/************************* Adafruit.io Setup *********************************/
-
-#define AIO_SERVER      ""
-#define AIO_SERVERPORT  1883                   // use 8883 for SSL
-#define AIO_USERNAME    ""
-#define AIO_KEY         ""
+#include "secrets.h"
 
 /************ Global State ******************/
 
