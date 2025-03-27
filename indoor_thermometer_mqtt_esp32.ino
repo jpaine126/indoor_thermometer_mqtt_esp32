@@ -15,8 +15,6 @@
 
 // Create a WiFiClient class to connect to the MQTT server.
 WiFiClient espClient;
-// or... use WiFiClientSecure for SSL
-//WiFiClientSecure client;
 
 // Setup the MQTT client class by passing in the WiFi client and MQTT server and login details.
 PubSubClient client(espClient);
@@ -52,9 +50,7 @@ void setup() {
 }
 
 void loop() {
-  // Ensure the connection to the MQTT server is alive (this will make the first
-  // connection and automatically reconnect when disconnected).  See the MQTT_connect
-  // function definition further below.
+  // Ensure the connection to the MQTT server is alive
   mqtt_reconnect();
 
   // waiting for i2c sensor to work
@@ -77,7 +73,6 @@ void loop() {
   packet_data["temperature"] = temp.temperature;
   packet_data["humidity"] = humidity.relative_humidity;
 
-  // Now we can publish stuff!
   Serial.print(F("\nSending thermometer val "));
   Serial.print(temp.temperature);
   Serial.print("...");
@@ -88,13 +83,6 @@ void loop() {
     Serial.println(F("OK!"));
   }
 
-  // ping the server to keep the mqtt connection alive
-  // NOT required if you are publishing once every KEEPALIVE seconds
-  /*
-  if(! mqtt.ping()) {
-    mqtt.disconnect();
-  }
-  */
   client.loop();
   delay(3000);
 }
@@ -147,7 +135,7 @@ void setup_mqtt_client() {
 }
 
 // Function to connect and reconnect as necessary to the MQTT server.
-// Should be called in the loop function and it will take care if connecting.
+// Should be called in the loop function and it will take care of connecting.
 void mqtt_reconnect() {
   // Loop until we're reconnected
   while (!client.connected()) {
@@ -161,15 +149,11 @@ void mqtt_reconnect() {
       )
     ) {
       Serial.println("connected");
-      // Once connected, publish an announcement...
-      // client.publish("outTopic", "hello world");
-      // // ... and resubscribe
-      // client.subscribe("inTopic");
+
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
       Serial.println(" try again in 5 seconds");
-      // Wait 5 seconds before retrying
       delay(5000);
     }
   }
@@ -204,7 +188,7 @@ void mqtt_register() {
   registration_data["cmps"]["hum_sensor1"]["unique_id"] = "temp01_ae_h";
   registration_data["cmps"]["hum_sensor1"]["suggested_display_precision"] = "1";
 
-  registration_data["state_topic"] = "thermostat_p/state";
+  registration_data["state_topic"] = therm_topic;
   registration_data["qos"] = 1;
 
   Serial.println("Registering to MQTT... ");
@@ -214,21 +198,24 @@ void mqtt_register() {
 
   int8_t ret;
   uint8_t retries = 1;
-  while (
-    (
-      ret = client.publish(config_topic, JSON.stringify(registration_data).c_str())
-    ) != 1
-  ) {
+
+  while (retries >= 0) {
+    ret = client.publish(config_topic, JSON.stringify(registration_data).c_str())
+    
+    if (ret) {
+      Serial.println("MQTT Registered!");
+      break;
+    }
+    
     Serial.println("MQTT registration failed, retrying...");
     delay(1000); 
     retries--;
+
+    if (retries == 0) {
+      Serial.println("MQTT Registration failed, moving on...");
+    }
   }
-  if (retries == 0) {
-    Serial.println("MQTT Registration failed, moving on...");
-  }
-  else {
-    Serial.println("MQTT Registered!");
-  }
+  
 }
 
 
