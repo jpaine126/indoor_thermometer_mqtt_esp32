@@ -2,8 +2,7 @@
   Indoor Thermometer w/ MQTT for Adafruit Feather ESP32 V2
  ****************************************************/
 #include <WiFi.h>
-#include "Adafruit_MQTT.h"
-#include "Adafruit_MQTT_Client.h"
+#include <PubSubClient.h>
 
 #include <Wire.h>
 #include "Adafruit_SHT4x.h"
@@ -15,87 +14,48 @@
 /************ Global State ******************/
 
 // Create a WiFiClient class to connect to the MQTT server.
-WiFiClient client;
+WiFiClient espClient;
 // or... use WiFiClientSecure for SSL
 //WiFiClientSecure client;
 
 // Setup the MQTT client class by passing in the WiFi client and MQTT server and login details.
-Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
+PubSubClient client(espClient);
+unsigned long lastMsg = 0;
+#define MSG_BUFFER_SIZE	(50)
+char msg[MSG_BUFFER_SIZE];
+int value = 0;
 
 Adafruit_SHT4x sht4 = Adafruit_SHT4x();
 
+// Device Params
+
+String clientId = "ThermostatClient-794782";
+
 /****************************** Feeds ***************************************/
 
-// Setup a feed for registering device.
-Adafruit_MQTT_Publish registration = Adafruit_MQTT_Publish(&mqtt, "homeassistant/device/temp01_ae_t/config");
-
-// Setup a feed for publishing.
-Adafruit_MQTT_Publish thermometer = Adafruit_MQTT_Publish(&mqtt, "thermostat_p/state");
-
-// Setup a feed called 'onoff' for subscribing to changes.
-Adafruit_MQTT_Subscribe onoffbutton = Adafruit_MQTT_Subscribe(&mqtt, "homeassistant/device/temp01_ae_t/onoff");
+const char config_topic[] = "homeassistant/device/temp01_ae_t/config";
+const char therm_topic[] = "thermostat_p/state";
+const char onoff_topic[] = "homeassistant/device/temp01_ae_t/onoff";
 
 /*************************** Sketch Code ************************************/
-
-// Bug workaround for Arduino 1.6.6, it seems to need a function declaration
-// for some reason (only affects ESP8266, likely an arduino-builder bug).
-void MQTT_connect();
 
 void setup() {
   Serial.begin(115200);
   delay(10);
 
-  // setting up sht4x
-  Wire.setPins(22, 20);
-  sht4.setPrecision(SHT4X_HIGH_PRECISION);
-  sht4.setHeater(SHT4X_NO_HEATER);
+  setup_thermostat();
+  setup_wifi();
+  setup_mqtt_client();
 
-  pinMode(2, INPUT);
-  delay(1);
-  bool polarity = digitalRead(2);
-  pinMode(2, OUTPUT);
-  digitalWrite(2, !polarity);
-
-  Serial.println(F("Adafruit MQTT demo"));
-
-  // Connect to WiFi access point.
-  Serial.println(); Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(WLAN_SSID);
-
-  WiFi.begin(WLAN_SSID, WLAN_PASS);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println();
-
-  Serial.println("WiFi connected");
-  Serial.println("IP address: "); Serial.println(WiFi.localIP());
-
-  // Setup MQTT subscription for onoff feed.
-  mqtt.subscribe(&onoffbutton);
-
-  MQTT_connect();
-  MQTT_register();
+  mqtt_reconnect();
+  mqtt_register();
 }
 
 void loop() {
   // Ensure the connection to the MQTT server is alive (this will make the first
   // connection and automatically reconnect when disconnected).  See the MQTT_connect
   // function definition further below.
-  MQTT_connect();
-
-  // this is our 'wait for incoming subscription packets' busy subloop
-  // try to spend your time here
-
-  Adafruit_MQTT_Subscribe *subscription;
-  while ((subscription = mqtt.readSubscription(5000))) {
-    if (subscription == &onoffbutton) {
-      Serial.print(F("Got: "));
-      Serial.println((char *)onoffbutton.lastread);
-    }
-  }
+  mqtt_reconnect();
 
   // waiting for i2c sensor to work
   Serial.println("Adafruit SHT4x test");
@@ -122,7 +82,7 @@ void loop() {
   Serial.print(temp.temperature);
   Serial.print("...");
   const char* packet = JSON.stringify(packet_data).c_str();
-  if (! thermometer.publish(packet, strlen(packet))) {
+  if (! client.publish(therm_topic, packet, strlen(packet))) {
     Serial.println(F("Failed"));
   } else {
     Serial.println(F("OK!"));
@@ -135,15 +95,92 @@ void loop() {
     mqtt.disconnect();
   }
   */
-  delay(1000);
+  client.loop();
+  delay(3000);
 }
 
 
-void MQTT_register() {
+/************ Helpers ******************/
+
+
+void setup_thermostat() {
+  // setting up sht4x
+  Wire.setPins(22, 20);
+  sht4.setPrecision(SHT4X_HIGH_PRECISION);
+  sht4.setHeater(SHT4X_NO_HEATER);
+
+  pinMode(2, INPUT);
+  delay(1);
+  bool polarity = digitalRead(2);
+  pinMode(2, OUTPUT);
+  digitalWrite(2, !polarity);
+}
+
+
+/************ WiFi Helpers ******************/
+
+
+void setup_wifi() {
+  // Connect to WiFi access point.
+  Serial.println(); Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(WLAN_SSID);
+
+  WiFi.begin(WLAN_SSID, WLAN_PASS);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+
+  Serial.println("WiFi connected");
+  Serial.println("IP address: "); Serial.println(WiFi.localIP());
+}
+
+
+/************ MQTT Helpers ******************/
+
+
+void setup_mqtt_client() {
+  client.setServer(MQTT_SERVER, MQTT_SERVERPORT);
+  client.setBufferSize(800);
+}
+
+// Function to connect and reconnect as necessary to the MQTT server.
+// Should be called in the loop function and it will take care if connecting.
+void mqtt_reconnect() {
+  // Loop until we're reconnected
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Attempt to connect
+    if (
+      client.connect(
+        clientId.c_str(),
+        MQTT_USERNAME,
+        MQTT_KEY
+      )
+    ) {
+      Serial.println("connected");
+      // Once connected, publish an announcement...
+      // client.publish("outTopic", "hello world");
+      // // ... and resubscribe
+      // client.subscribe("inTopic");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
+}
+
+
+void mqtt_register() {
   JSONVar registration_data;
 
   registration_data["dev"]["ids"] = "1";
-  registration_data["dev"]["name"] = "thermostat_p";
+  registration_data["dev"]["name"] = "Thermostat";
   registration_data["dev"]["mf"] = "paine";
   registration_data["dev"]["mdl"] = "prototype";
   registration_data["dev"]["sw"] = "0.0";
@@ -158,13 +195,14 @@ void MQTT_register() {
   registration_data["cmps"]["temp_sensor1"]["unit_of_measurement"] = "°C";
   registration_data["cmps"]["temp_sensor1"]["value_template"] = "{{ value_json.temperature }}";
   registration_data["cmps"]["temp_sensor1"]["unique_id"] = "temp01_ae_t";
+  registration_data["cmps"]["temp_sensor1"]["suggested_display_precision"] = "1";
 
-  // message too long for mqtt library
-  // registration_data["cmps"]["hum_sensor1"]["p"] = "sensor";
-  // registration_data["cmps"]["hum_sensor1"]["device_class"] = "humidity";
-  // registration_data["cmps"]["hum_sensor1"]["unit_of_measurement"] = "%";
-  // registration_data["cmps"]["hum_sensor1"]["value_template"] = "{{ value_json.humidity}}";
-  // registration_data["cmps"]["hum_sensor1"]["unique_id"] = "temp01_ae_h";
+  registration_data["cmps"]["hum_sensor1"]["p"] = "sensor";
+  registration_data["cmps"]["hum_sensor1"]["device_class"] = "humidity";
+  registration_data["cmps"]["hum_sensor1"]["unit_of_measurement"] = "%";
+  registration_data["cmps"]["hum_sensor1"]["value_template"] = "{{ value_json.humidity }}";
+  registration_data["cmps"]["hum_sensor1"]["unique_id"] = "temp01_ae_h";
+  registration_data["cmps"]["hum_sensor1"]["suggested_display_precision"] = "1";
 
   registration_data["state_topic"] = "thermostat_p/state";
   registration_data["qos"] = 1;
@@ -172,52 +210,25 @@ void MQTT_register() {
   Serial.println("Registering to MQTT... ");
 
   const char* packet = JSON.stringify(registration_data).c_str();
-  Serial.println(packet);
-  Serial.println(strlen(packet) * 4);
+  Serial.println(strlen(packet));
 
   int8_t ret;
   uint8_t retries = 1;
   while (
     (
-      ret = registration.publish(packet, 550 * 4)//strlen(packet)*4)
-    ) != 0
+      ret = client.publish(config_topic, JSON.stringify(registration_data).c_str())
+    ) != 1
   ) {
     Serial.println("MQTT registration failed, retrying...");
-    delay(1000);  // wait 5 seconds
+    delay(1000); 
     retries--;
-    // if (retries == 0) {
-    //   // basically die and wait for WDT to reset me
-    //   while (1);
-    // }
-    break;
   }
-  Serial.println("MQTT Registered!");
+  if (retries == 0) {
+    Serial.println("MQTT Registration failed, moving on...");
+  }
+  else {
+    Serial.println("MQTT Registered!");
+  }
 }
 
 
-// Function to connect and reconnect as necessary to the MQTT server.
-// Should be called in the loop function and it will take care if connecting.
-void MQTT_connect() {
-  int8_t ret;
-
-  // Stop if already connected.
-  if (mqtt.connected()) {
-    return;
-  }
-
-  Serial.print("Connecting to MQTT... ");
-
-  uint8_t retries = 3;
-  while ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
-       Serial.println(mqtt.connectErrorString(ret));
-       Serial.println("Retrying MQTT connection in 5 seconds...");
-       mqtt.disconnect();
-       delay(5000);  // wait 5 seconds
-       retries--;
-       if (retries == 0) {
-         // basically die and wait for WDT to reset me
-         while (1);
-       }
-  }
-  Serial.println("MQTT Connected!");
-}
