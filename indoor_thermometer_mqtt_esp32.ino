@@ -34,6 +34,7 @@ String clientId = "ThermostatClient-794782";
 const char config_topic[] = "homeassistant/device/temp01_ae_t/config";
 const char therm_topic[] = "thermostat_p/state";
 const char onoff_topic[] = "homeassistant/device/temp01_ae_t/onoff";
+const char thermostat_availability[] = "thermostat_p/state";
 
 /*************************** Sketch Code ************************************/
 
@@ -48,6 +49,7 @@ void setup() {
   mqtt_reconnect();
   mqtt_register();
 }
+
 
 void loop() {
   // Ensure the connection to the MQTT server is alive
@@ -149,7 +151,7 @@ void mqtt_reconnect() {
       )
     ) {
       Serial.println("connected");
-
+      client.publish(thermostat_availability, "online");
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -176,6 +178,7 @@ void mqtt_register() {
 
   registration_data["cmps"]["temp_sensor1"]["p"] = "sensor";
   registration_data["cmps"]["temp_sensor1"]["device_class"] = "temperature";
+  registration_data["cmps"]["temp_sensor1"]["expire_after"] = 600;
   registration_data["cmps"]["temp_sensor1"]["unit_of_measurement"] = "°C";
   registration_data["cmps"]["temp_sensor1"]["value_template"] = "{{ value_json.temperature }}";
   registration_data["cmps"]["temp_sensor1"]["unique_id"] = "temp01_ae_t";
@@ -183,12 +186,14 @@ void mqtt_register() {
 
   registration_data["cmps"]["hum_sensor1"]["p"] = "sensor";
   registration_data["cmps"]["hum_sensor1"]["device_class"] = "humidity";
+  registration_data["cmps"]["hum_sensor1"]["expire_after"] = 600;
   registration_data["cmps"]["hum_sensor1"]["unit_of_measurement"] = "%";
   registration_data["cmps"]["hum_sensor1"]["value_template"] = "{{ value_json.humidity }}";
   registration_data["cmps"]["hum_sensor1"]["unique_id"] = "temp01_ae_h";
   registration_data["cmps"]["hum_sensor1"]["suggested_display_precision"] = "1";
 
-  registration_data["state_topic"] = therm_topic;
+  registration_data["stat_t"] = therm_topic;
+  registration_data["availability_topic"] = thermostat_availability;
   registration_data["qos"] = 1;
 
   Serial.println("Registering to MQTT... ");
@@ -200,7 +205,7 @@ void mqtt_register() {
   uint8_t retries = 1;
 
   while (retries >= 0) {
-    ret = client.publish(config_topic, JSON.stringify(registration_data).c_str())
+    ret = client.publish(config_topic, JSON.stringify(registration_data).c_str());
     
     if (ret) {
       Serial.println("MQTT Registered!");
