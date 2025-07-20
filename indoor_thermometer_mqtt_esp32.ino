@@ -35,8 +35,21 @@ const char config_topic[] = "homeassistant/device/temp01_ae_t/config";
 const char therm_topic[] = "thermostat_p/state";
 const char onoff_topic[] = "homeassistant/device/temp01_ae_t/onoff";
 const char thermostat_availability[] = "thermostat_p/state";
+const char hass_availability[] = "homeassistant/status";
 
 /*************************** Sketch Code ************************************/
+
+
+void callback(char* topic, byte* payload, unsigned int length) {
+  Serial.print("Message arrived [");
+  Serial.print(topic);
+  Serial.print("] ");
+  for (int i = 0; i < length; i++) {
+    Serial.print((char)payload[i]);
+  }
+  Serial.println();
+}
+
 
 void setup() {
   Serial.begin(115200);
@@ -134,6 +147,7 @@ void setup_wifi() {
 void setup_mqtt_client() {
   client.setServer(MQTT_SERVER, MQTT_SERVERPORT);
   client.setBufferSize(800);
+  client.setCallback(callback);
 }
 
 // Function to connect and reconnect as necessary to the MQTT server.
@@ -147,10 +161,9 @@ void mqtt_reconnect() {
       client.connect(
         clientId.c_str(),
         MQTT_USERNAME,
-        MQTT_KEY
-      )
-    ) {
+        MQTT_KEY)) {
       Serial.println("connected");
+      client.subscribe(hass_availability);
       client.publish(thermostat_availability, "online");
     } else {
       Serial.print("failed, rc=");
