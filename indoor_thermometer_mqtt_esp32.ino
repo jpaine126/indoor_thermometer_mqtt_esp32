@@ -25,7 +25,7 @@ WiFiClient espClient;
 // Setup the MQTT client class by passing in the WiFi client and MQTT server and login details.
 PubSubClient client(espClient);
 unsigned long lastMsg = 0;
-#define MSG_BUFFER_SIZE	(50)
+#define MSG_BUFFER_SIZE (50)
 char msg[MSG_BUFFER_SIZE];
 int value = 0;
 
@@ -92,15 +92,16 @@ void loop() {
 
   // waiting for i2c sensor to work
   Serial.println("Adafruit SHT4x test");
-  if (! sht4.begin()) {
+  if (!sht4.begin()) {
     Serial.println("Couldn't find SHT4x");
     while (1) delay(1);
   }
 
+  // take reading
   sensors_event_t humidity, temp;
-  
+
   uint32_t timestamp = millis();
-  sht4.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
+  sht4.getEvent(&humidity, &temp);  // populate temp and humidity objects with fresh data
 
   Serial.print("Temperature: ");
   Serial.print(temp.temperature);
@@ -126,6 +127,7 @@ void loop() {
 
   display_state = !display_state;
 
+  // send to MQTT broker
   JSONVar packet_data;
 
   packet_data["temperature"] = temp.temperature;
@@ -135,7 +137,7 @@ void loop() {
   Serial.print(temp.temperature);
   Serial.print("...");
   const char* packet = JSON.stringify(packet_data).c_str();
-  if (! client.publish(therm_topic, packet, strlen(packet))) {
+  if (!client.publish(therm_topic, packet, strlen(packet))) {
     Serial.println(F("Failed"));
   } else {
     Serial.println(F("OK!"));
@@ -168,7 +170,8 @@ void setup_thermostat() {
 
 void setup_wifi() {
   // Connect to WiFi access point.
-  Serial.println(); Serial.println();
+  Serial.println();
+  Serial.println();
   Serial.print("Connecting to ");
   Serial.println(WLAN_SSID);
 
@@ -180,7 +183,8 @@ void setup_wifi() {
   Serial.println();
 
   Serial.println("WiFi connected");
-  Serial.println("IP address: "); Serial.println(WiFi.localIP());
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
 }
 
 
@@ -262,21 +266,18 @@ void mqtt_register() {
 
   while (retries >= 0) {
     ret = client.publish(config_topic, JSON.stringify(registration_data).c_str());
-    
+
     if (ret) {
       Serial.println("MQTT Registered!");
       break;
     }
-    
+
     Serial.println("MQTT registration failed, retrying...");
-    delay(1000); 
+    delay(1000);
     retries--;
 
     if (retries == 0) {
       Serial.println("MQTT Registration failed, moving on...");
     }
   }
-  
 }
-
-
