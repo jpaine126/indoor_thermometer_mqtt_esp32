@@ -91,13 +91,13 @@ void loop() {
   mqtt_reconnect();
 
   // waiting for i2c sensor to work
-  Serial.println("Adafruit SHT4x test");
   if (!sht4.begin()) {
     Serial.println("Couldn't find SHT4x");
     while (1) delay(1);
   }
 
   // take reading
+  Serial.println("Reading sensor...");
   sensors_event_t humidity, temp;
 
   uint32_t timestamp = millis();
@@ -112,12 +112,14 @@ void loop() {
 
   // display reading
   if (display_state) {
+    Serial.println("Displaying temperature");
     char temp_buff[5];
     dtostrf((temp.temperature * 1.8) + 32, 4, 1, temp_buff);
     String temp_display;
     temp_display = String(temp_buff) + " F";
     P.print(temp_display.c_str());
   } else {
+    Serial.println("Displaying humidity");
     char hum_buff[5];
     dtostrf(humidity.relative_humidity, 4, 1, hum_buff);
     String hum_display;
@@ -133,9 +135,7 @@ void loop() {
   packet_data["temperature"] = temp.temperature;
   packet_data["humidity"] = humidity.relative_humidity;
 
-  Serial.print(F("\nSending thermometer val "));
-  Serial.print(temp.temperature);
-  Serial.print("...");
+  Serial.print("Sending MQTT msg...");
   const char* packet = JSON.stringify(packet_data).c_str();
   if (!client.publish(therm_topic, packet, strlen(packet))) {
     Serial.println(F("Failed"));
@@ -183,7 +183,7 @@ void setup_wifi() {
   Serial.println();
 
   Serial.println("WiFi connected");
-  Serial.println("IP address: ");
+  Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
 }
 
@@ -268,7 +268,7 @@ void mqtt_register() {
     ret = client.publish(config_topic, JSON.stringify(registration_data).c_str());
 
     if (ret) {
-      Serial.println("MQTT Registered!");
+      Serial.println("MQTT registered!");
       break;
     }
 
@@ -277,7 +277,7 @@ void mqtt_register() {
     retries--;
 
     if (retries == 0) {
-      Serial.println("MQTT Registration failed, moving on...");
+      Serial.println("MQTT registration failed, moving on...");
     }
   }
 }
