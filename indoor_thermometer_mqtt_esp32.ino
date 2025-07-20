@@ -1,6 +1,8 @@
 /***************************************************
   Indoor Thermometer w/ MQTT for Adafruit Feather ESP32 V2
  ****************************************************/
+#include <stdlib.h>
+
 #include <WiFi.h>
 #include <PubSubClient.h>
 
@@ -8,6 +10,10 @@
 #include "Adafruit_SHT4x.h"
 
 #include <Arduino_JSON.h>
+
+#include <MD_Parola.h>
+#include <MD_MAX72xx.h>
+#include <SPI.h>
 
 #include "secrets.h"
 
@@ -24,6 +30,18 @@ char msg[MSG_BUFFER_SIZE];
 int value = 0;
 
 Adafruit_SHT4x sht4 = Adafruit_SHT4x();
+
+// display params
+#define HARDWARE_TYPE MD_MAX72XX::FC16_HW
+#define MAX_DEVICES 4
+
+#define CLK_PIN 5
+#define DATA_PIN 19
+#define CS_PIN 13
+
+MD_Parola P = MD_Parola(HARDWARE_TYPE, CS_PIN, MAX_DEVICES);
+
+bool display_state = true;  // true = temp, false = hum
 
 // Device Params
 
@@ -52,6 +70,10 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 
 void setup() {
+  P.begin();
+  P.setIntensity(0);  // Set brightness to 0 (minimum)
+  P.displayClear();
+
   Serial.begin(115200);
   delay(10);
 
@@ -80,8 +102,29 @@ void loop() {
   uint32_t timestamp = millis();
   sht4.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
 
-  Serial.print("Temperature: "); Serial.print(temp.temperature); Serial.println(" degrees C");
-  Serial.print("Humidity: "); Serial.print(humidity.relative_humidity); Serial.println("% rH");
+  Serial.print("Temperature: ");
+  Serial.print(temp.temperature);
+  Serial.println(" degrees C");
+  Serial.print("Humidity: ");
+  Serial.print(humidity.relative_humidity);
+  Serial.println("% rH");
+
+  // display reading
+  if (display_state) {
+    char temp_buff[5];
+    dtostrf((temp.temperature * 1.8) + 32, 4, 1, temp_buff);
+    String temp_display;
+    temp_display = String(temp_buff) + " F";
+    P.print(temp_display.c_str());
+  } else {
+    char hum_buff[5];
+    dtostrf(humidity.relative_humidity, 4, 1, hum_buff);
+    String hum_display;
+    hum_display = String(hum_buff) + "%";
+    P.print(hum_display.c_str());
+  }
+
+  display_state = !display_state;
 
   JSONVar packet_data;
 
