@@ -1,6 +1,12 @@
 /***************************************************
   Indoor Thermometer w/ MQTT for Adafruit Feather ESP32 V2
  ****************************************************/
+
+// include writing to MDParola screen
+// #define PAROLA_SCREEN
+
+
+
 #include <stdlib.h>
 
 #include <WiFi.h>
@@ -11,9 +17,11 @@
 
 #include <Arduino_JSON.h>
 
+#ifdef PAROLA_SCREEN
 #include <MD_Parola.h>
 #include <MD_MAX72xx.h>
 #include <SPI.h>
+#endif
 
 #include "secrets.h"
 
@@ -31,6 +39,7 @@ int value = 0;
 
 Adafruit_SHT4x sht4 = Adafruit_SHT4x();
 
+#ifdef PAROLA_SCREEN
 // display params
 #define HARDWARE_TYPE MD_MAX72XX::FC16_HW
 #define MAX_DEVICES 4
@@ -42,6 +51,7 @@ Adafruit_SHT4x sht4 = Adafruit_SHT4x();
 MD_Parola P = MD_Parola(HARDWARE_TYPE, CS_PIN, MAX_DEVICES);
 
 bool display_state = true;  // true = temp, false = hum
+#endif
 
 // Device Params
 
@@ -70,9 +80,11 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 
 void setup() {
+  #ifdef PAROLA_SCREEN
   P.begin();
   P.setIntensity(0);  // Set brightness to 0 (minimum)
   P.displayClear();
+  #endif
 
   Serial.begin(115200);
   delay(10);
@@ -110,6 +122,7 @@ void loop() {
   Serial.print(humidity.relative_humidity);
   Serial.println("% rH");
 
+  #ifdef PAROLA_SCREEN
   // display reading
   if (display_state) {
     Serial.println("Displaying temperature");
@@ -128,6 +141,7 @@ void loop() {
   }
 
   display_state = !display_state;
+  #endif
 
   // send to MQTT broker
   JSONVar packet_data;
