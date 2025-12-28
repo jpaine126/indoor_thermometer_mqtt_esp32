@@ -55,14 +55,15 @@ bool display_state = true;  // true = temp, false = hum
 
 // Device Params
 
-String clientId = "ThermostatClient-794782";
+String clientId = "ThermostatClient-01";
+
 
 /****************************** Feeds ***************************************/
 
-const char config_topic[] = "homeassistant/device/temp01_ae_t/config";
-const char therm_topic[] = "thermostat_p/state";
-const char onoff_topic[] = "homeassistant/device/temp01_ae_t/onoff";
-const char thermostat_availability[] = "thermostat_p/state";
+const char config_topic[] = "homeassistant/device/therm01/config";
+const char therm_topic[] = "therm01/measurement";
+const char onoff_topic[] = "homeassistant/device/therm01/onoff";
+const char thermostat_availability[] = "therm01/status";
 const char hass_availability[] = "homeassistant/status";
 
 /*************************** Sketch Code ************************************/
